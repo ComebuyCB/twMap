@@ -19,14 +19,21 @@
   <script src="/static/common/js/main.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+  <script src="https://unpkg.co/gsap@3/dist/gsap.min.js"></script>
   <!-- <script src="https://d3js.org/d3.v4.min.js"></script> -->
 
 </head>
 <body>
   <div id="wrap">
     <main class="py-0">
+      <button id="backLv" class="btn btn-light pos-f loc-7" style="z-index: 10; display: none;">←</button>
+      <div class="d-flex flex-column pos-f loc-9" style="z-index: 10;">
+        <button id="zoomIn" class="btn btn-success py-1 fs-5">+</button>
+        <button id="zoomOut" class="btn btn-success py-1 fs-5">-</button>
+      </div> 
+      
       <div id="map">
-        <div id="svgBox" class="draggable" style="transform: translate(0px,0px) scale(1)">
+        <div id="svgBox" style="transform: translate(0px,0px) scale(1)">
           <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
       </div>
@@ -43,9 +50,37 @@
     var ww = window.innerWidth
     var wh = window.innerHeight
     var onDrag = false
+    var onZoom = false
     var scaleValue = 1
+    var scaleAmp = 2
 
-    interact('.draggable')
+    interact('#svgBox')
+      // .gesturable({
+      //   modifiers: [
+      //     interact.modifiers.restrictRect({
+      //       restriction: 'parent',
+      //       endOnly: true
+      //     })
+      //   ],
+      //   listeners: {
+      //     start (event) {
+
+      //     },
+      //     move (event) {
+      //       let nS = scaleValue * event.scale
+
+      //       nS = nS > 24 ? 24 : nS
+      //       nS = nS < 1 ? 1 : nS
+            
+      //       $('#detail-percent').text(nS)
+      //       $(event.target).css('transform',`scale(${nS})`)
+      //       dragMoveListener(event)
+      //     },
+      //     end (event) {
+      //       scaleValue = scaleValue * event.scale
+      //     }
+      //   }
+      // })
       .draggable({
         inertia: true,
         modifiers: [
@@ -55,24 +90,25 @@
           })
         ],
         listeners: {
-        start (){
-          onDrag = true
-        },
-        move (event) {
-          let $tg = $(event.target)
-
-          let matrix = getXYS( event.target )
-          let x = (parseFloat(matrix.x) || 0) + event.dx
-          let y = (parseFloat(matrix.y) || 0) + event.dy
-          $tg.css('transform', `translate(${x}px,${y}px) scale(${matrix.s})`)
-          // $tg.attr('data-x', x)
-          // $tg.attr('data-y', y)
-        },
-        end (event) {
-          onDrag = false
+          start (){
+            onDrag = true
+          },
+          move (event) {
+            dragMoveListener(event)
+          },
+          end (event) {
+            onDrag = false
+          }
         }
+      })
+      
+      function dragMoveListener(event) {
+        let trans = getXYS( event.target )
+        let x = (parseFloat(trans.x) || 0) + event.dx
+        let y = (parseFloat(trans.y) || 0) + event.dy
+
+        $(event.target).css('transform', `translate(${x}px, ${y}px) scale(${trans.s})`)
       }
-    })
 
     function getXYS( elem ){
       let style = window.getComputedStyle( elem )
@@ -315,9 +351,7 @@
     }
 
 
-
     function create_D3GeoMap( svgID, data ){
-
       function getWindowScale(){
         let s = ww > wh ? wh : ww * 1.1 // contain
         let sr = ww < 700 && ww < wh ? 15 : 12
@@ -360,7 +394,7 @@
           }
         })
         .on('mouseenter', d => {
-          if (onDrag) { return } 
+          if (onDrag) { return }
 
           $('#detail').show()
           $('#detail-county').text( d.properties.COUNTYNAME )
@@ -369,28 +403,7 @@
         })
         .on('click', d => {
           if (onDrag) { return } 
-          
-          let $TG = $(event.target)
-          if ( $TG.hasClass('county') ){
-            $(svgID).find('.county.active').removeClass('active')
-            $(svgID).find('.town.active').removeClass('active')
-          } else {
-            $(svgID).find('.town.active').removeClass('active')
-          }
 
-          // console.log(d.geometry.type, event.x, event.y, event.target, event.offsetX)
-          let rect = event.target.getBoundingClientRect()
-          
-          let xs = ww / rect.width
-          let ys = wh / rect.height
-          
-          let s = xs > ys ? ys : xs
-              s = s * 0.9
-              console.log(rect, '放大:' + s)
-
-              zoomMap( scaleValue * s, $(event.target)[0].getBBox() )
-
-          $(event.target).addClass('active')
           $('#detail').show()
           $('#detail-county').text( d.properties.COUNTYNAME )
           $('#detail-town').text( d.properties.TOWNNAME || '' )
@@ -405,22 +418,48 @@
     })
 
     $('#svgBox').on('mousewheel',() => {
-      let mt = getXYS( $('#svgBox')[0] )
-      let oS = scaleValue
-      let nS = null // new Scale
-      let sR = 2 // scale amp
-      if (event.deltaY < 0){
-        nS = oS*sR
-      }
-      else if (event.deltaY > 0){
-        nS = oS/sR
+      event.deltaY < 0 ? zoomMap( scaleValue*scaleAmp ) : zoomMap( scaleValue/scaleAmp )
+    })
+
+    $('#zoomIn').on('click',() => {
+      zoomMap( scaleValue*scaleAmp )
+    })
+
+    $('#zoomOut').on('click',() => {
+      zoomMap( scaleValue/scaleAmp )
+    })
+
+
+
+    $('#svg').on('click', 'path', function(event){
+      if (onDrag) { return }
+
+      let $TG = $(event.target)
+
+      if ( $TG.hasClass('county') ){
+        $('#svg').find('.county.active').removeClass('active')
+        $('#svg').find('.town.active').removeClass('active')
+      } else {
+        $('#svg').find('.town.active').removeClass('active')
       }
 
-      zoomMap( nS )
+      let rect = $TG[0].getBoundingClientRect()
+      let xs = ww / rect.width
+      let ys = wh / rect.height
+      
+      let s = xs > ys ? ys : xs
+      s = $TG.hasClass('county') ? s * 0.7 : s * 0.35
+      console.log(rect, '放大:' + s)
+
+      zoomMap( scaleValue * s, $TG[0].getBBox() )
+
+      $TG.addClass('active')
     })
 
     function zoomMap( newScale, pathXY ){
-      let mt = getXYS( $('#svgBox')[0] )
+      if (onZoom){ return }
+      onZoom = true
+      let trans = getXYS( $('#svgBox')[0] )
       let oS = scaleValue
       let nS = newScale
 
@@ -431,28 +470,52 @@
       let bx = (ww*nS - ww) / 2
       let by = (wh*nS - wh) / 2
 
-      let rS = nS / oS
-      let x = mt.x * rS
-      let y = mt.y * rS
+      let x = trans.x * nS / oS
+      let y = trans.y * nS / oS
 
       if ( pathXY ){
         let px = pathXY.x + ( pathXY.width / 2 )
         let py = pathXY.y + ( pathXY.height / 2 )
-        console.log( pathXY, px, py )
-        x = (ww/2 - px) * nS - (pathXY.width / 2 / nS)
-        y = (wh/2 - py) * nS - (pathXY.height / 2 / nS)
+
+        x = (ww/2 - px) * nS
+        y = (wh/2 - py) * nS
+      } else if ( event.deltaY ){
+        x = (ww/2 - event.offsetX) * nS + (event.clientX - ww/2)
+        y = (wh/2 - event.offsetY) * nS + (event.clientY - wh/2)
       }
 
-      // x = ( x > bx ) ? bx : x
-      // x = ( x < -bx ) ? -bx : x
-      // y = ( y > by ) ? by : y
-      // y = ( y < -by ) ? -by : y
+      x = ( x > bx ) ? bx : x
+      x = ( x < -bx ) ? -bx : x
+      y = ( y > by ) ? by : y
+      y = ( y < -by ) ? -by : y
 
-      // console.log( { scale: nS, bound: `${bx},${by}`, transXY: `${x},${y}` } )
-      $('#svgBox').css('transform',`translate(${x}px,${y}px) scale(${nS})`)
-
+      gsap.fromTo('#svgBox', 0.4, { x: trans.x, y: trans.y, scale: oS }, { x: x, y: y, scale: nS, ease: 'power2.out', 
+        onComplete: ()=>{ onZoom = false }
+      })
+      // $('#svgBox').css('transition', 'transform 0.5s')
+      // $('#svgBox').css('transform', `translate(${x}px,${y}px) scale(${nS})`)
+      
+      nS > 1 ? $('#backLv').show() : $('#backLv').hide()
       scaleValue = nS
     }
+
+    $('#backLv').on('click', function(){
+      if (onZoom){ return }
+      let $Town = $('#svg').find('.town.active')
+      let $County = $('#svg').find('.county.active')
+
+      if ( $Town.length > 0 ){
+        let cId = $Town.attr('countyId')
+        $Town.removeClass('active')
+        $(`[mainId=${cId}]`).click()
+      } else if ( $County.length > 0 && $Town.length == 0 ){
+        $('#backLv').hide()
+        $County.removeClass('active')
+        zoomMap(1)
+      } else {
+        zoomMap(1)
+      }
+    })
   </script>
 </body>
 </html>

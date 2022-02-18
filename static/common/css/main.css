@@ -144,23 +144,21 @@
   /*====== [Current Page] ======*/
     /*=== index ===*/
       #map { overflow: hidden; max-height: 100vh; }
-      #svgBox { position: relative; left: 0; right: 0; top: 0; bottom: 0; }
-      #svgBox svg { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
-      #svgBox svg { fill: none; background-color: #bef; width: 100vw; touch-action: none; border: 10px solid #999; /* transition: all 0.2s ease;*/ }
+      #svgBox { position: relative; left: 0; right: 0; top: 0; bottom: 0; touch-action: none; }
+      #svgBox svg { shape-rendering: optimizeSpeed; position: absolute; left: 0; right: 0; top: 0; bottom: 0; fill: none; background-color: #bef; width: 100vw; touch-action: none; /* transition: all 0.2s ease;*/ }
 
-      #svgBox svg path { fill: transparent; stroke: #333; stroke-width: 0.25px; cursor: pointer; transition: all 0.2s ease; fill: #fff; }
-      #svgBox svg path:hover,
-      #svgBox svg path.active { stroke: #000; }
-      
-      #svgBox svg path.town:hover { opacity: 0.75; }
-      #svgBox svg path.county:hover { opacity: 0.9; stroke-width: 0.5px; }
+      #svgBox svg path { fill: none; stroke: #111; stroke-width: 0.2px; cursor: pointer; /*transition: all 0.2s ease;*/ }
+      #svgBox svg path.town:hover { stroke: #111; opacity: 0.75; }
+      #svgBox svg path.county:hover { stroke: #111; opacity: 0.9; stroke-width: 0.4px; }
 
-      #svgBox svg path.town.active { stroke: #000; fill: #000 !important; }
-      #svgBox svg path.county.active { opacity: 0.2; pointer-events: none; stroke-width: 0.5px; animation: 1s twinkle infinite }
+      #svgBox svg path.town.active { stroke: #111 !important; fill: #ff0 !important; animation: 1.2s twinkle infinite; }
+      #svgBox svg path.county.active { stroke: #111 !important; stroke-width: 0.4px; pointer-events: none; animation: 1.2s twinkle infinite; }
+
       @keyframes twinkle {
-        50% { fill: #fff; }
+        0% { fill: rgba(255,255,128,0.15); }
+        50% { fill: rgba(0,0,0,0.15); }
+        100% { fill: rgba(255,255,128,0.15); }
       }
-
 
       @media( min-width: 576px ){}
       @media( min-width: 768px ){}
