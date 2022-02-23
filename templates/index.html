@@ -22,11 +22,27 @@
   <script src="https://unpkg.co/gsap@3/dist/gsap.min.js"></script>
   <!-- <script src="https://d3js.org/d3.v4.min.js"></script> -->
 
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <!-- <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script> -->
+
+  <style>
+    #detail-charts { width: 400px; }
+    hr { margin-top: .5rem; margin-bottom: .5rem; }
+    @media( max-width: 420px ){
+      #detail-charts { width: 300px; }
+    }
+  </style>
 </head>
 <body>
   <div id="wrap">
     <main class="py-0">
       <button id="backLv" class="btn btn-light pos-f loc-7" style="z-index: 10; display: none;">←</button>
+
+      <div class="nav flex-column nav-pills pos-f loc-7" style="z-index: 10; top: 50px;" role="tablist">
+        <button id="showPPColor" class="btn btn-primary nav-link active" data-bs-toggle="pill" type="button" role="tab" onclick="changeThemeColor()">議員好感度黨籍比例</button>
+        <button id="showSFColor" class="btn btn-primary nav-link" data-bs-toggle="pill" type="button" role="tab" onclick="changeThemeColor()">市長施政滿意度</button>
+      </div>
+
       <div class="d-flex flex-column pos-f loc-9" style="z-index: 10;">
         <button id="zoomIn" class="btn btn-success py-1 fs-5">+</button>
         <button id="zoomOut" class="btn btn-success py-1 fs-5">-</button>
@@ -38,10 +54,26 @@
         </div>
       </div>
 
-      <div id="details" class="card p-3 pos-f loc-3">
-        <h3 id="detail-county"></h3>
-        <h4 id="detail-town"></h4>
-        <h5 id="detail-percent"></h5>
+      <div id="detail-hover" class="card p-1 pos-f" style="display: none; pointer-events: none;">
+        <h6 id="detail-county"></h6>
+        <small id="detail-town"></small>
+      </div>
+
+      <div id="detail-click" class="card p-3 pos-f loc-3">
+        <h6 id="detail-mp"></h6>
+        <div id="detail-charts" style="display: none">
+          <div>選區最受歡迎議員前三名</div>
+          <div id="detail-chart1"></div>
+          <hr>
+          <div>議員好感度黨籍比例</div>
+          <div id="detail-chart2"></div>
+          <hr>
+          <div>市長施政滿意度</div>
+          <div id="detail-chart3"></div>
+          <hr>
+          <div>政黨傾向</div>
+          <div id="detail-chart4"></div>
+        </div>
       </div>
     </main>
   </div>
@@ -53,6 +85,11 @@
     var onZoom = false
     var scaleValue = 1
     var scaleAmp = 2
+    var blueColor = d3.scale.linear().domain([40,100]).range(['#CDE7FB','#0F468C'])
+    var greenColor = d3.scale.linear().domain([40,100]).range(['#C1F7E5','#186839'])
+    var ppColor = d3.scale.linear().domain([-30,30]).range(['#05A5F5','#6BDA45'])
+    var sfColor = d3.scale.linear().domain([-30,30]).range(['#FF0000','#00EE00'])
+    var data
 
     interact('#svgBox')
       // .gesturable({
@@ -97,7 +134,10 @@
             dragMoveListener(event)
           },
           end (event) {
-            onDrag = false
+            let st = setTimeout(()=>{
+              onDrag = false
+              clearTimeout(st)
+            }, 0)
           }
         }
       })
@@ -130,26 +170,83 @@
      *    2-1.Simplify 簡化線圖
      *    2-2.Export GeoJSON
      **/
+
     $.get( '/static/common/json/TOWN2.json', ( townData )=>{
-      $.get( '/static/common/json/COUNTY2.json', ( countyData )=>{
-        townData['mapSize'] = 'town'
-        countyData['mapSize'] = 'county'
+      $.get( '/static/common/json/COUNTY5.json', ( countyData )=>{
+        $.get( '/static/common/json/survey.json', ( surveyData )=>{
+          townData['mapSize'] = 'town'
+          countyData['mapSize'] = 'county'
 
-        // countyData = data_polygon_edit( countyData, (item)=>{ item.reverse() })
+          // 將數據 % 轉為 純數字
+          surveyData = surveyData.map( (obj) => {
+            $.each( obj, (key, val) => {
+              if ( val.indexOf('%') !== -1 ){
+                obj[key] = +val.replace('%','')
+              } else if ( key === '縣市' || key === '行政區' || key === '第一名議員' || key === '第二名議員' || key === '第三名議員' ) {
+                obj[key] = val
+              } else if ( val === '' ) {
+                obj[key] = 0
+              } else {
+                obj[key] = val
+              }
+            })
+            return obj
+          })
 
-        let allData = JSON.parse(JSON.stringify(townData))
-        allData['mapSize'] = 'all'
-        allData.features = [...townData.features, ...countyData.features]
+          // 鄉鎮 塞入數據
+          townData.features.forEach( (obj) => {
+            surveyData.forEach( (svObj) => {
+              if ( obj.properties.TOWNNAME && ( svObj['縣市'] === obj.properties.COUNTYNAME && svObj['行政區'] === obj.properties.TOWNNAME ) ){
+                obj['mp'] = svObj
+                return true
+              }
+            })
+          })
+
+          // 縣市 塞入數據
+          countyData.features.forEach( (obj) => {
+            surveyData.forEach( (svObj) => {
+              if ( svObj['縣市'] === obj.properties.COUNTYNAME && svObj['行政區'] === '總和' ){
+                obj['mp'] = svObj
+                return true
+              }
+            })
+          })
+
+          // countyData = data_polygon_edit( countyData, (item)=>{ item.reverse() })
+
+          let allData = JSON.parse(JSON.stringify(townData))
+          allData['mapSize'] = 'all'
+          allData.features = [...townData.features, ...countyData.features]
 
 
-        function getGeo_DeleteOutOfBoundary( geo, boundary ){
-          let {left=-180, right=180, top=90, bottom=-90} = boundary
-          
-          let coord = geo.coordinates
-          if ( geo.type === 'MultiPolygon' ){
-            $.each( coord, (cIdx, cItem) => {
-              $.each( cItem, (iIdx, iItem) => {
-                cItem[iIdx] = iItem.filter( (item, idx) => {
+          function getGeo_DeleteOutOfBoundary( geo, boundary ){
+            let {left=-180, right=180, top=90, bottom=-90} = boundary
+            
+            let coord = geo.coordinates
+            if ( geo.type === 'MultiPolygon' ){
+              $.each( coord, (cIdx, cItem) => {
+                $.each( cItem, (iIdx, iItem) => {
+                  cItem[iIdx] = iItem.filter( (item, idx) => {
+                    return (
+                      item[0] > left &&
+                      item[0] < right &&
+                      item[1] < top &&
+                      item[1] > bottom
+                    )
+                  })
+                })
+              })
+              // 過濾空陣列
+              $.each( coord, (cIdx, cItem) => { 
+                coord[cIdx] = cItem.filter( (item, idx) => {
+                  return item[0]
+                })
+              })
+            } 
+            else if ( geo.type === 'Polygon' ) {
+              $.each( coord, (cIdx, cItem) => {
+                coord[cIdx] = cItem.filter( (item, idx) => {
                   return (
                     item[0] > left &&
                     item[0] < right &&
@@ -158,141 +255,123 @@
                   )
                 })
               })
-            })
-            // 過濾空陣列
-            $.each( coord, (cIdx, cItem) => { 
-              coord[cIdx] = cItem.filter( (item, idx) => {
-                return item[0]
-              })
-            })
-          } 
-          else if ( geo.type === 'Polygon' ) {
-            $.each( coord, (cIdx, cItem) => {
-              coord[cIdx] = cItem.filter( (item, idx) => {
-                return (
-                  item[0] > left &&
-                  item[0] < right &&
-                  item[1] < top &&
-                  item[1] > bottom
-                )
-              })
-            })
+            }
+
+            return geo
           }
 
-          return geo
-        }
+          $.each( allData.features, (idx, obj) => {
+            let prop = obj.properties
+            let geo = obj.geometry
+            let coord = obj.geometry.coordinates
+            
+            switch( prop.COUNTYID ){
+              case 'E': // 高雄市
+                // 刪除離島
+                var boundary = {
+                  left: 120.0,
+                  bottom: 22.2
+                }
 
-        $.each( allData.features, (idx, obj) => {
-          let prop = obj.properties
-          let geo = obj.geometry
-          let coord = obj.geometry.coordinates
-          
-          switch( prop.COUNTYID ){
-            case 'E': // 高雄市
-              // 刪除離島
-              var boundary = {
-                left: 120.0,
-                bottom: 22.2
-              }
+                // COUNTY & TOWN (旗津區)
+                if ( prop.TOWNID === undefined || prop.TOWNID === 'E10' ){
+                  geo = getGeo_DeleteOutOfBoundary( geo, boundary)
+                }
+              break;
 
-              // COUNTY & TOWN (旗津區)
-              if ( prop.TOWNID === undefined || prop.TOWNID === 'E10' ){
-                geo = getGeo_DeleteOutOfBoundary( geo, boundary)
-              }
-            break;
+              case 'C': // 基隆市
+                // 刪除離島
+                var boundary = {
+                  right: 121.9,
+                  top: 25.2
+                }
 
-            case 'C': // 基隆市
-              // 刪除離島
-              var boundary = {
-                right: 121.9,
-                top: 25.2
-              }
+                // COUNTY & TOWN (中正區)
+                if ( prop.TOWNID === undefined || prop.TOWNID === 'C01' ){
+                  geo = getGeo_DeleteOutOfBoundary( geo, boundary)
+                }
+              break;
 
-              // COUNTY & TOWN (中正區)
-              if ( prop.TOWNID === undefined || prop.TOWNID === 'C01' ){
-                geo = getGeo_DeleteOutOfBoundary( geo, boundary)
-              }
-            break;
+              case 'G': // 宜蘭縣
+                // 刪除離島
+                var boundary = {
+                  right: 122.1,
+                  top: 25.1
+                }
 
-            case 'G': // 宜蘭縣
-              // 刪除離島
-              var boundary = {
-                right: 122.1,
-                top: 25.1
-              }
+                // COUNTY & TOWN (頭城鎮)
+                if ( prop.TOWNID === undefined || prop.TOWNID === 'G02' ){
+                  geo = getGeo_DeleteOutOfBoundary( geo, boundary)
+                }
+              break;
 
-              // COUNTY & TOWN (頭城鎮)
-              if ( prop.TOWNID === undefined || prop.TOWNID === 'G02' ){
-                geo = getGeo_DeleteOutOfBoundary( geo, boundary)
-              }
-            break;
-
-            case 'Z': // 連江縣
-              // 偏移 (連江縣)
-              var loc_W = [0.3, -0.7]
-              geo = data_polygon_edit( geo, (item)=>{
-                $.each( item, (idx,val)=>{
-                  val[0] += loc_W[0]
-                  val[1] += loc_W[1]
-                })
-              })
-            break;
-
-            case 'W': // 金門縣
-              // 偏移 (金門縣)
-              var loc_W = [1.1, 0]
-              geo = data_polygon_edit( geo, (item)=>{
-                $.each( item, (idx,val)=>{
-                  val[0] += loc_W[0]
-                  val[1] += loc_W[1]
-                })
-              })
-
-              // 偏移 (烏坵鄉)
-              var loc_W06 = [-0.65, -0.35]
-
-              // COUNTY
-              if ( prop.TOWNID === undefined ){
-                if ( geo.type === 'MultiPolygon' ){
-                  $.each( coord, (cIdx, cItem) => {
-                    if ( cIdx == coord.length-1 || cIdx == coord.length-2 ){
-                      $.each( cItem, (idx2, ele2) => {
-                        $.each( ele2, (idx3, ele3) => {
-                          ele3[0] += loc_W06[0]
-                          ele3[1] += loc_W06[1]
-                        })
-                      })
-                    }
+              case 'Z': // 連江縣
+                // 偏移 (連江縣)
+                var loc_W = [0.3, -0.7]
+                geo = data_polygon_edit( geo, (item)=>{
+                  $.each( item, (idx,val)=>{
+                    val[0] += loc_W[0]
+                    val[1] += loc_W[1]
                   })
-                } else if ( geo.type === 'Polygon' ) {
-                  $.each( coord, (cIdx, cItem) => {
-                    if ( cIdx == coord.length-1 || cIdx == coord.length-2 ){
-                      $.each( cItem, (idx2, ele2) => {
-                        ele2[0] += loc_W06[0]
-                        ele2[1] += loc_W06[1]
-                      })
-                    }
+                })
+              break;
+
+              case 'W': // 金門縣
+                // 偏移 (金門縣)
+                var loc_W = [1.1, 0]
+                geo = data_polygon_edit( geo, (item)=>{
+                  $.each( item, (idx,val)=>{
+                    val[0] += loc_W[0]
+                    val[1] += loc_W[1]
+                  })
+                })
+
+                // 偏移 (烏坵鄉)
+                var loc_W06 = [-0.65, -0.35]
+
+                // COUNTY
+                if ( prop.TOWNID === undefined ){
+                  if ( geo.type === 'MultiPolygon' ){
+                    $.each( coord, (cIdx, cItem) => {
+                      if ( cIdx == coord.length-1 || cIdx == coord.length-2 ){
+                        $.each( cItem, (idx2, ele2) => {
+                          $.each( ele2, (idx3, ele3) => {
+                            ele3[0] += loc_W06[0]
+                            ele3[1] += loc_W06[1]
+                          })
+                        })
+                      }
+                    })
+                  } else if ( geo.type === 'Polygon' ) {
+                    $.each( coord, (cIdx, cItem) => {
+                      if ( cIdx == coord.length-1 || cIdx == coord.length-2 ){
+                        $.each( cItem, (idx2, ele2) => {
+                          ele2[0] += loc_W06[0]
+                          ele2[1] += loc_W06[1]
+                        })
+                      }
+                    })
+                  }
+                }
+
+                // TOwN (烏坵鄉)
+                if ( prop.TOWNID === 'W06' ){
+                  geo = data_polygon_edit( geo, (item)=>{
+                    $.each( item, (idx, ele)=>{
+                      ele[0] += loc_W06[0]
+                      ele[1] += loc_W06[1]
+                    })
                   })
                 }
-              }
+                break;
+            }
+          })
 
-              // TOwN (烏坵鄉)
-              if ( prop.TOWNID === 'W06' ){
-                geo = data_polygon_edit( geo, (item)=>{
-                  $.each( item, (idx, ele)=>{
-                    ele[0] += loc_W06[0]
-                    ele[1] += loc_W06[1]
-                  })
-                })
-              }
-              break;
-          }
+          // 額外處理json檔，因為原始檔案陣列是反轉的，所以將它校正。
+          data = data_polygon_edit( allData, (item)=>{ item.reverse() })
+
+          create_D3GeoMap('#svg', data)
         })
-
-        // 額外處理json檔，因為原始檔案陣列是反轉的，所以將它校正。
-        let data = data_polygon_edit( allData, (item)=>{ item.reverse() })
-
-        create_D3GeoMap('#svg', data)
       })
     })
 
@@ -381,40 +460,85 @@
           mainId: (d) => d.properties.TOWNID || d.properties.COUNTYID,
           mainCode: (d) => d.properties.TOWNCODE || d.properties.COUNTYCODE,
           mainName: (d) => d.properties.TOWNNAME || d.properties.COUNTYNAME,
+          indexNo: (d,i) => i,
         })
         .attr({
           class: (d) => d.properties.TOWNID ? 'town' : 'county'
         })
         .style({
           fill: (d) => {
-            let p = (Math.random() * 100).toFixed(2)
-            d.percent = p
-            // return `hsl(210, 80%, calc( (100% - ${d.percent || -50}%) / 2 + 25% ))`
-            return `hsl(150, 65%, calc( (100% - ${d.percent || -50}%) / 2 + 25% ))`
+            if (d['mp']){
+              if ( $('#showSFColor').hasClass('active') ){
+                let good = d['mp']['市長施政滿意比例']
+                let bad = d['mp']['市長施政不滿意比例']
+                return sfColor( good - bad )
+              } else {
+                let blue = d['mp']['國民黨籍議員好感度比例']
+                let green = d['mp']['民進黨籍議員好感度比例']
+                return ppColor( green - blue )
+              }
+              
+              // if ( b > g ){
+              //   return blueColor(b)
+              // } else {
+              //   return greenColor(g)
+              // }
+              
+              
+            } else {
+              return 'rgba(255,255,255,0.5)'
+            }
           }
         })
         .on('mouseenter', d => {
           if (onDrag) { return }
 
-          $('#detail').show()
+          $('#detail-hover').show()
           $('#detail-county').text( d.properties.COUNTYNAME )
           $('#detail-town').text( d.properties.TOWNNAME || '' )
-          $('#detail-percent').text( '得票率: ' +d.percent+ '%' )
         })
         .on('click', d => {
           if (onDrag) { return } 
 
-          $('#detail').show()
-          $('#detail-county').text( d.properties.COUNTYNAME )
-          $('#detail-town').text( d.properties.TOWNNAME || '' )
-          $('#detail-percent').text( '得票率: ' +d.percent+ '%' )
         })
     }
+
+
+    function changeThemeColor(){
+      $.each( data.features, (idx,d)=>{
+        if (d['mp']){
+          let color = 'rgba(255,255,255,0.5)'
+          if ( $('#showSFColor').hasClass('active') ){
+            let good = d['mp']['市長施政滿意比例']
+            let bad = d['mp']['市長施政不滿意比例']
+            color = sfColor(good-bad)
+          } else {
+            let blue = d['mp']['國民黨籍議員好感度比例']
+            let green = d['mp']['民進黨籍議員好感度比例']
+            if ( blue > green ){
+              color = blueColor(blue)
+            } else {
+              color = greenColor(green)
+            }
+          }
+          
+
+          if ( d.mp['行政區'] === '總和' ){
+            $(`path[countyName=${d.mp['縣市']}][mainName=${d.mp['縣市']}]`).css('fill', color)
+          } else {
+            $(`path[countyName=${d.mp['縣市']}][mainName=${d.mp['行政區']}]`).css('fill', color)
+          }
+        }
+      })
+    }
+
 
     // listeners
     $(window).on('resize', ()=>{
       ww = window.innerWidth
       wh = window.innerHeight
+
+      location.reload()
     })
 
     $('#svgBox').on('mousewheel',() => {
@@ -430,40 +554,236 @@
     })
 
 
-
-    $('#svg').on('click', 'path', function(event){
+    $('#svg').on('click', function(event){
       if (onDrag) { return }
-
-      let $TG = $(event.target)
-
-      if ( $TG.hasClass('county') ){
-        $('#svg').find('.county.active').removeClass('active')
-        $('#svg').find('.town.active').removeClass('active')
-      } else {
-        $('#svg').find('.town.active').removeClass('active')
-      }
-
-      let rect = $TG[0].getBoundingClientRect()
-      let xs = ww / rect.width
-      let ys = wh / rect.height
       
-      let s = xs > ys ? ys : xs
-      s = $TG.hasClass('county') ? s * 0.7 : s * 0.35
-      console.log(rect, '放大:' + s)
+      let $TG = $(event.target)
+      if ( $TG[0].nodeName === 'path' ){
+        let indexNo = $TG.attr('indexNo')
+        if ( $TG.hasClass('county') ){
+          $('#svg').find('.county.active').removeClass('active')
+          $('#svg').find('.town.active').removeClass('active')
+        } else {
+          $('#svg').find('.town.active').removeClass('active')
+        }
+    
+        let rect = $TG[0].getBoundingClientRect()
+        let xs = ww / rect.width
+        let ys = wh / rect.height
+        
+        let s = xs > ys ? ys : xs
+        s = $TG.hasClass('county') ? s * 0.6 : s * 0.3
+        console.log(rect, '放大:' + s)
+    
+        zoomMap( scaleValue * s, $TG[0].getBBox() )
+    
+        $TG.addClass('active')
 
-      zoomMap( scaleValue * s, $TG[0].getBBox() )
 
-      $TG.addClass('active')
+        $('#detail-click').show()
+        $('#detail-chart1').html('')
+        $('#detail-chart2').html('')
+        $('#detail-chart3').html('')
+        $('#detail-chart4').html('')
+
+        let mp = data.features[indexNo]['mp']
+        if ( mp ){
+          console.log( mp )
+          $('#detail-charts').show()
+          $('#detail-mp').html('')
+
+          let chart1 = new ApexCharts( $("#detail-chart1")[0], {
+            xaxis: {
+              categories: [mp['第一名議員'],mp['第二名議員'],mp['第三名議員']],
+              labels: {
+                formatter: function (val) {
+                  return val + "%"
+                }
+              }
+            },
+            series: [{
+              name: '',
+              data: [mp['第一名議員好感度'],mp['第二名議員好感度'],mp['第三名議員好感度']]
+            }],
+            dataLabels: {
+              formatter: function (val, opt) {
+                return val + '%'
+              },
+            },
+            chart: {
+              type: 'bar',
+              height: 150,
+              // width: 360,
+              toolbar: {
+                show: false,
+              }
+            },
+            tooltip: {
+              y: {
+                formatter: function (val) {
+                  return val + "%"
+                }
+              }
+            },
+            plotOptions: {
+              bar: {
+                horizontal: true,
+              }
+            },
+            tooltip: {
+              enabled: false,
+            },
+          })
+          chart1.render()
+
+
+          let chart2 = new ApexCharts( $("#detail-chart2")[0], {
+            series: [
+              { name: '國民黨', data: [mp['國民黨籍議員好感度比例']] },
+              { name: '民進黨', data: [mp['民進黨籍議員好感度比例']] },
+              { name: '其他(無黨籍、其他政黨、未表態)', data: [mp['其他黨籍議員好感度比例']] },
+            ],
+            colors: ['#05A5F5','#6BDA45','#929292'],
+            chart: {
+              type: 'bar',
+              stacked: true,
+              stackType: '100%',
+              // width: 360,
+              height: 110,
+              toolbar: {
+                show: false,
+              }
+            },
+            plotOptions: {
+              bar: {
+                horizontal: true,
+              },
+            },
+            xaxis: {
+              categories: [''],
+              labels: {
+                show: false
+              },
+            },
+            yaxis: {
+              labels: {
+                show: false
+              },
+            },
+            legend: {
+              position: 'top',
+              horizontalAlign: 'left',
+              offsetX: -8,
+              offsetY: 15
+            },
+            tooltip: {
+              enabled: false,
+            },
+          })
+          chart2.render()
+
+
+          let chart3 = new ApexCharts( $("#detail-chart3")[0], {
+            series: [
+              { name: '滿意', data: [mp['市長施政滿意比例']] },
+              { name: '不滿意', data: [mp['市長施政不滿意比例']] },
+              { name: '無意見', data: [mp['市長施政無意見比例']] },
+            ],
+            colors: ['#00EE00','#FF0000','#929292'],
+            chart: {
+              type: 'bar',
+              stacked: true,
+              stackType: '100%',
+              // width: 360,
+              height: 110,
+              toolbar: {
+                show: false,
+              }
+            },
+            plotOptions: {
+              bar: {
+                horizontal: true,
+              },
+            },
+            xaxis: {
+              categories: [''],
+              labels: {
+                show: false
+              },
+            },
+            yaxis: {
+              labels: {
+                show: false
+              },
+            },
+            legend: {
+              position: 'top',
+              horizontalAlign: 'left',
+              offsetX: -8,
+              offsetY: 15
+            },
+            tooltip: {
+              enabled: false,
+            },
+          })
+          chart3.render()
+
+
+          let chart4 = new ApexCharts( $("#detail-chart4")[0], {
+            labels: ['國民黨','民進黨','民眾黨','時代力量','基進黨','中間選民','其他政黨'],
+            series: [mp['政黨比例-國民黨'],mp['政黨比例-民進黨'],mp['政黨比例-民眾黨'],mp['政黨比例-時代力量'],mp['政黨比例-基進黨'],mp['政黨比例-中間選民'],mp['政黨比例-其他政黨']],
+            colors: ['#05A5F5','#6BDA45','#F9B927','#D30877','#FC0B19','#929292','#28B2F4'],
+            chart: {
+              type: 'pie',
+              // width: 360,
+              height: 240,
+              toolbar: {
+                show: false,
+              }
+            },
+            legend: {
+              offsetY: -10
+            },
+            responsive: [{
+              breakpoint: 480,
+              options: {
+                chart: {
+                  // width: 320
+                },
+                legend: {
+                  offsetY: 0,
+                  position: 'top'
+                }
+              }
+            }]
+          })
+          chart4.render()
+        } else {
+          $('#detail-charts').hide()
+          $('#detail-mp').text(`無資料`)
+        }
+
+
+
+
+
+
+      } else {
+        $('#detail-charts').hide()
+      }
     })
+
 
     function zoomMap( newScale, pathXY ){
       if (onZoom){ return }
       onZoom = true
+
       let trans = getXYS( $('#svgBox')[0] )
       let oS = scaleValue
       let nS = newScale
+      let cW = $('#detail-click').width()
 
-      nS = nS > 24 ? 24 : nS
+      nS = nS > 20 ? 20 : nS
       nS = nS < 1 ? 1 : nS
 
       // 邊界 ( 因為scale 是由中心放大，故/2 => 例如1000寬*2=>2000，左右各+500寬 => 邊界從左右 [0,0] => [500,-500] )
@@ -479,6 +799,8 @@
 
         x = (ww/2 - px) * nS
         y = (wh/2 - py) * nS
+
+        x -= cW / 2
       } else if ( event.deltaY ){
         x = (ww/2 - event.offsetX) * nS + (event.clientX - ww/2)
         y = (wh/2 - event.offsetY) * nS + (event.clientY - wh/2)
@@ -508,7 +830,8 @@
         let cId = $Town.attr('countyId')
         $Town.removeClass('active')
         $(`[mainId=${cId}]`).click()
-      } else if ( $County.length > 0 && $Town.length == 0 ){
+      } else if ( $County.length > 0 && $Town.length === 0 ){
+        $('#svg').click()
         $('#backLv').hide()
         $County.removeClass('active')
         zoomMap(1)
@@ -516,6 +839,18 @@
         zoomMap(1)
       }
     })
+
+    $('#svg').on('mouseenter', 'path', function(evt){
+      $('#detail-hover').show()
+    })
+    $('#svg').on('mousemove', 'path', function(evt){
+      $('#detail-hover').css({left: evt.clientX + 10 +'px', top: evt.clientY + 15 +'px'})
+    })
+    $('#svg').on('mouseleave', 'path', function(evt){
+      $('#detail-hover').hide()
+    })
+
+
   </script>
 </body>
 </html>
