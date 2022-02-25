@@ -148,21 +148,21 @@
 
   /*====== [Current Page] ======*/
     /*=== index ===*/
-      #map { overflow: hidden; max-height: 100vh; }
+      #map { overflow: hidden; max-height: 100vh; background-color: #eef; }
       #svgBox { position: relative; left: 0; right: 0; top: 0; bottom: 0; touch-action: none; }
-      #svgBox svg { shape-rendering: optimizeSpeed; position: absolute; left: 0; right: 0; top: 0; bottom: 0; fill: none; background-color: #bef; width: 100vw; touch-action: none; /* transition: all 0.2s ease;*/ }
+      #svgBox svg { shape-rendering: optimizeSpeed; position: absolute; left: 0; right: 0; top: 0; bottom: 0; fill: none; background-color: #def; width: 100vw; touch-action: none; /* transition: all 0.2s ease;*/ }
 
       #svgBox svg path { fill: #fff; stroke: #111; stroke-width: 0.2px; cursor: pointer; /*transition: all 0.2s ease;*/ }
       #svgBox svg path.town:hover { stroke: #111; filter: brightness(130%); opacity: 0.9; }
       #svgBox svg path.town.active { stroke: #111 !important; filter: brightness(135%); }
       
       #svgBox svg path.county:hover { stroke: #111; opacity: 0.9; stroke-width: 0.4px; }
-      #svgBox svg path.county.active { stroke: #111 !important; stroke-width: 1px; pointer-events: none; animation: 1.2s twinkle infinite; box-shadow: 1px 1px 10px 10px #ff0000; }
+      #svgBox svg path.county.active { stroke: #111 !important; stroke-width: 0.6px; pointer-events: none; animation: 1.2s twinkle infinite; box-shadow: 1px 1px 10px 10px #ff0000; }
 
       @keyframes twinkle {
-        0% { fill: rgba(255,255,128,0.1); }
-        50% { fill: rgba(0,0,0,0.1); }
-        100% { fill: rgba(255,255,128,0.1); }
+        0% { fill: rgba(255,255,255,0); }
+        50% { fill: rgba(0,0,0,0); }
+        100% { fill: rgba(255,255,255,0); }
       }
 
       @media( min-width: 576px ){}

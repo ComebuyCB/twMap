@@ -38,7 +38,7 @@
 <body>
   <div id="wrap">
     <main class="py-0">
-      <button id="backLv" class="btn btn-light pos-f loc-7" style="z-index: 10; display: none;">←</button>
+      <button id="backLv" class="btn btn-light pos-f loc-7" style="z-index: 10;">←</button>
 
       <div class="p-1 pos-f loc-1 tab-content" style="z-index: 10; bottom: 15px">
         <table id="ppColorTable" class="tab-pane show active text-center">
@@ -47,7 +47,7 @@
           </tr>
           <tr>
             <td><div id="ppbMin" class="px-1">低</div></td>
-            <td><div style="background: linear-gradient( to right, #A1CAF4 0%, #1B519D 100% ); padding: 7px 50px"></div></td>
+            <td><div id="ppbClr" style="padding: 7px 50px"></div></td>
             <td><div id="ppbMax" class="px-1">高</div></td>
           </tr>
           <tr>
@@ -55,7 +55,7 @@
           </tr>
           <tr>
             <td><div id="ppgMin" class="px-1">低</div></td>
-            <td><div style="background: linear-gradient( to right, #97EEC8 0%, #24854E 100% ); padding: 7px 50px"></div></td>
+            <td><div id="ppgClr" style="padding: 7px 50px"></div></td>
             <td><div id="ppgMax" class="px-1">高</div></td>
           </tr>
         </table>
@@ -65,7 +65,7 @@
           </tr>
           <tr>
             <td><div id="sfMin" class="px-1">壞</div></td>
-            <td><div style="background: linear-gradient( to right, #FF0000 0%, #00EE00 100% ); padding: 7px 50px"></div></td>
+            <td><div id="sfClr" style="padding: 7px 50px"></div></td>
             <td><div id="sfMax" class="px-1">好</div></td>
           </tr>
         </table>
@@ -87,7 +87,7 @@
         </div>
       </div>
 
-      <div id="cursor-hover" class="card p-1 pos-f text-center" style="display: none; pointer-events: none;">
+      <div id="cursor-hover" class="card p-1 pos-f text-center" style="display: none; pointer-events: none; left: -999px; top: -999px">
         <h6 id="cursor-county"></h6>
         <small id="cursor-town"></small>
       </div>
@@ -119,12 +119,42 @@
     var onZoom = false
     var scaleValue = 1
     var scaleAmp = 2
-    var blueColor = d3.scale.linear().domain([0,100]).range(['#A1CAF4','#1B519D'])
-    var greenColor = d3.scale.linear().domain([0,100]).range(['#97EEC8','#24854E'])
-    var sfColor = d3.scale.linear().domain([-100,100]).range(['#FF0000','#00EE00'])
-    var data
 
+    var blueClrArr = ['#C8EBFD','#5AC3FA','#00A4FC','#0178BA','#004F81']
+    var blueDomain
+    var blueColor = d3.scale.linear().domain( d3.range( blueClrArr.length ) ).range( blueClrArr )
+
+    var greenClrArr = ['#73E5AA','#57D690','#3CC471','#32A55F','#24854E']
+    var greenDomain
+    var greenColor = d3.scale.linear().domain( d3.range( greenClrArr.length ) ).range( greenClrArr )
+
+    var sfClrArr = ['#FF0000','#EE9900','#EEFF00','#33FF33']
+    var sfDomain
+    var sfColor = d3.scale.linear().domain( d3.range( sfClrArr.length ) ).range( sfClrArr )
+    
+    var data
+    var touch = false
+
+
+    let gDis = 0
     interact('#svgBox')
+      .gesturable({
+        listeners: {
+          start (event) {
+            gDis = event.distance
+          },
+          move (event) {
+            if ( Math.abs(gDis - event.distance) > 1){
+              event.scale > 1.01 ? zoomMap( scaleValue*scaleAmp ) : ''
+              event.scale < 0.99 ? zoomMap( scaleValue/scaleAmp ) : ''
+            }
+            dragMoveListener(event)
+            gDis = event.distance
+          },
+          end () {
+          }
+        }
+      })
       .draggable({
         inertia: true,
         modifiers: [
@@ -140,7 +170,7 @@
           move (event) {
             dragMoveListener(event)
           },
-          end (event) {
+          end () {
             let st = setTimeout(()=>{
               onDrag = false
               clearTimeout(st)
@@ -168,30 +198,46 @@
     getMainData( resData => {
       data = resData
 
-      let mpB = data.mpBoundary
+      let svB = data.svBoundary
+      blueDomain = d3.scale.linear().domain([svB['國民黨籍議員好感度比例Min'], svB['國民黨籍議員好感度比例Max']]).range([0,blueClrArr.length-1])
+      greenDomain = d3.scale.linear().domain([svB['民進黨籍議員好感度比例Min'], svB['民進黨籍議員好感度比例Max']]).range([0,greenClrArr.length-1])
+      sfDomain = d3.scale.linear().domain([svB['市長施政滿意比例Min'], svB['市長施政滿意比例Max']]).range([0,sfClrArr.length-1])
       
-      blueColor = blueColor.domain([mpB.ppbMin, mpB.ppbMax])
-      greenColor = greenColor.domain([mpB.ppgMin, mpB.ppgMax])
-      sfColor = sfColor.domain([mpB.sfMin - mpB.sfMax, mpB.sfMax - mpB.sfMin])
-
-      $('#ppbMax').text(mpB.ppbMax)
-      $('#ppbMin').text(mpB.ppbMin)
-      $('#ppgMax').text(mpB.ppgMax)
-      $('#ppgMin').text(mpB.ppgMin)
-      $('#sfMax').text(mpB.sfMax - mpB.sfMin)
-      $('#sfMin').text(mpB.sfMin - mpB.sfMax)
+      create_InfoColor('#ppbClr', blueClrArr )
+      create_InfoColor('#ppgClr', greenClrArr )
+      create_InfoColor('#sfClr', sfClrArr )
+      
+      $('#ppbMax').text(svB['國民黨籍議員好感度比例Max'])
+      $('#ppbMin').text(svB['國民黨籍議員好感度比例Min'])
+      $('#ppgMax').text(svB['民進黨籍議員好感度比例Max'])
+      $('#ppgMin').text(svB['民進黨籍議員好感度比例Min'])
+      $('#sfMax').text(svB['市長施政滿意比例Max'])
+      $('#sfMin').text(svB['市長施政滿意比例Min'])
 
       create_D3GeoMap(data)
     })
 
-    function create_D3GeoMap(data ){
+    function create_InfoColor( tg, clrArr ){
+      let str = ''
+      $.each( clrArr, (idx ,item) => {
+        let p1 = (idx / clrArr.length) * 100 + '%'
+        let p2 = ( (idx+1) / clrArr.length) * 100 + '%'
+        str += `,${item} ${p1}, ${item} ${p2}`
+      })
+      $(tg).css('background',`linear-gradient( to right ${str} )`)
+    }
+
+    function create_D3GeoMap(data){
       // 讓d3抓svg，並寫入寬高
       $('#svgBox').css({ width: ww, height: wh})
       $('#svg').attr('width', ww).attr('height', wh).attr('viewBox', `0 0 ${ww} ${wh}`)
 
       function getWindowScale(){
-        let s = ww > wh ? wh : ww * 1.1 // contain
-        let sr = ww < 700 && ww < wh ? 15 : 12
+        let s = ww > wh ? wh : ww // contain
+        let mpW = data.mapBoundary.maxX - data.mapBoundary.minX
+        let mpH = data.mapBoundary.maxY - data.mapBoundary.minY
+
+        let sr = ( ww / wh > mpW / mpH ) ? 13 : 16.5
         return s * sr
       }
 
@@ -227,7 +273,6 @@
         .on('mouseenter', d => {
           if (onDrag) { return }
 
-          $('#cursor-hover').show()
           $('#cursor-county').text( d.properties.COUNTYNAME )
           $('#cursor-town').text( d.properties.TOWNNAME || '' )
         })
@@ -238,36 +283,78 @@
         changeThemeColor()
     }
 
-
     function changeThemeColor(){
       $.each( data.features, (idx,d)=>{
-        if (d['mp']){
+        if (d.sv){
           let color = 'rgba(255,255,255,1)'
           if ( $('#showSFColor').hasClass('active') ){
-            let good = d['mp']['市長施政滿意比例']
-            let bad = d['mp']['市長施政不滿意比例']
-            color = sfColor(good-bad)
+            let sfR = (d.sv['市長施政滿意比例'] - d.sv['市長施政不滿意比例']).toFixed(2)
+            color = sfColor( sfDomain( sfR ).toFixed(0) )
           } else {
-            let blue = d['mp']['國民黨籍議員好感度比例']
-            let green = d['mp']['民進黨籍議員好感度比例']
+            let blue = d.sv['國民黨籍議員好感度比例']
+            let green = d.sv['民進黨籍議員好感度比例']
             if ( blue > green ){
-              color = blueColor(blue)
-            } else {
-              color = greenColor(green)
+              color = blueColor( blueDomain(blue).toFixed(0) )
+            } else if ( blue <= green ) {
+              color = greenColor( greenDomain(green).toFixed(0) )
             }
           }
           
-          if ( d.mp['行政區'] === '總和' ){
-            $(`path[countyName=${d.mp['縣市']}][mainName=${d.mp['縣市']}]`).css('fill', color)
+          if ( d.sv['行政區'] === '總和' ){
+            $(`path[countyName=${d.sv['縣市']}][mainName=${d.sv['縣市']}]`).css('fill', color)
           } else {
-            $(`path[countyName=${d.mp['縣市']}][mainName=${d.mp['行政區']}]`).css('fill', color)
+            $(`path[countyName=${d.sv['縣市']}][mainName=${d.sv['行政區']}]`).css('fill', color)
           }
         }
       })
     }
 
+    function zoomMap( newScale, pathXY ){
+      if (onZoom){ return }
+      onZoom = true
 
-    // listeners
+      let trans = getXYS( $('#svgBox')[0] )
+      let oS = scaleValue
+      let nS = newScale
+
+      nS = nS > 20 ? 20 : nS
+      nS = nS < 1 ? 1 : nS
+
+      // 邊界 ( 因為scale 是由中心放大，故/2 => 例如1000寬*2=>2000，左右各+500寬 => 邊界從左右 [0,0] => [500,-500] )
+      let bx = (ww*nS - ww) / 2
+      let by = (wh*nS - wh) / 2
+
+      let x = trans.x * nS / oS
+      let y = trans.y * nS / oS
+
+      if ( pathXY ){ // 地圖區塊點擊
+        let px = pathXY.x + ( pathXY.width / 2 )
+        let py = pathXY.y + ( pathXY.height / 2 )
+
+        x = (ww/2 - px) * nS
+        y = (wh/2 - py) * nS
+
+        x -= $('#detail-click').width() / 2
+
+      } else if ( event.deltaY ){ // 滑鼠滾輪
+        x = (ww/2 - event.offsetX) * nS + (event.clientX - ww/2)
+        y = (wh/2 - event.offsetY) * nS + (event.clientY - wh/2)
+      }
+
+      x = ( x > bx ) ? bx : x
+      x = ( x < -bx ) ? -bx : x
+      y = ( y > by ) ? by : y
+      y = ( y < -by ) ? -by : y
+
+      gsap.fromTo('#svgBox', 0.4, { x: trans.x, y: trans.y, scale: oS }, { x: x, y: y, scale: nS, ease: 'power2.out', 
+        onComplete: ()=>{ onZoom = false }
+      })
+
+      scaleValue = nS
+    }
+
+
+  /* ====== listeners ====== */
     $(window).on('resize', ()=>{
       ww = window.innerWidth
       wh = window.innerHeight
@@ -278,15 +365,12 @@
     $('#svgBox').on('mousewheel',() => {
       event.deltaY < 0 ? zoomMap( scaleValue*scaleAmp ) : zoomMap( scaleValue/scaleAmp )
     })
-
     $('#zoomIn').on('click',() => {
       zoomMap( scaleValue*scaleAmp )
     })
-
     $('#zoomOut').on('click',() => {
       zoomMap( scaleValue/scaleAmp )
     })
-
 
     $('#svg').on('click', function(event){
       if (onDrag) { return }
@@ -307,8 +391,7 @@
         
         let s = xs > ys ? ys : xs
         s = $TG.hasClass('county') ? s * 0.6 : s * 0.3
-        console.log(rect, '放大:' + s)
-    
+        
         zoomMap( scaleValue * s, $TG[0].getBBox() )
     
         $TG.addClass('active')
@@ -319,18 +402,20 @@
         $('#detail-chart3').html('')
         $('#detail-chart4').html('')
 
-        let mp = data.features[indexNo]['mp']
+        let sv = data.features[indexNo]['sv']
         let countyName = $TG.attr('countyName')
         let townName = $TG.attr('townName') ? ' - ' + $TG.attr('townName') : ''
         $('#detail-location').text( countyName + townName )
 
-        if ( mp ){
+        console.log(rect, '放大:' + s, sv)
+
+        // 生成圖表
+        if ( sv ){
           $('#detail-charts').show()
-          console.log( mp )
 
           let chart1 = new ApexCharts( $("#detail-chart1")[0], {
             xaxis: {
-              categories: [mp['第一名議員'],mp['第二名議員'],mp['第三名議員']],
+              categories: [sv['第一名議員'],sv['第二名議員'],sv['第三名議員']],
               labels: {
                 show: false,
                 formatter: function (val) {
@@ -340,7 +425,7 @@
             },
             series: [{
               name: '',
-              data: [mp['第一名議員好感度'],mp['第二名議員好感度'],mp['第三名議員好感度']]
+              data: [sv['第一名議員好感度'],sv['第二名議員好感度'],sv['第三名議員好感度']]
             }],
             dataLabels: {
               formatter: function (val, opt) {
@@ -375,9 +460,9 @@
 
           let chart2 = new ApexCharts( $("#detail-chart2")[0], {
             series: [
-              { name: '國民黨', data: [mp['國民黨籍議員好感度比例']] },
-              { name: '民進黨', data: [mp['民進黨籍議員好感度比例']] },
-              { name: '其他(無黨籍、其他政黨、未表態)', data: [mp['其他黨籍議員好感度比例']] },
+              { name: '國民黨', data: [sv['國民黨籍議員好感度比例']] },
+              { name: '民進黨', data: [sv['民進黨籍議員好感度比例']] },
+              { name: '其他(無黨籍、其他政黨、未表態)', data: [sv['其他黨籍議員好感度比例']] },
             ],
             colors: ['#05A5F5','#6BDA45','#929292'],
             chart: {
@@ -420,9 +505,9 @@
 
           let chart3 = new ApexCharts( $("#detail-chart3")[0], {
             series: [
-              { name: '滿意', data: [mp['市長施政滿意比例']] },
-              { name: '不滿意', data: [mp['市長施政不滿意比例']] },
-              { name: '無意見', data: [mp['市長施政無意見比例']] },
+              { name: '滿意', data: [sv['市長施政滿意比例']] },
+              { name: '不滿意', data: [sv['市長施政不滿意比例']] },
+              { name: '無意見', data: [sv['市長施政無意見比例']] },
             ],
             colors: ['#00EE00','#FF0000','#929292'],
             chart: {
@@ -465,7 +550,7 @@
 
           let chart4 = new ApexCharts( $("#detail-chart4")[0], {
             labels: ['國民黨','民進黨','民眾黨','時代力量','基進黨','中間選民','其他政黨'],
-            series: [mp['政黨比例-國民黨'],mp['政黨比例-民進黨'],mp['政黨比例-民眾黨'],mp['政黨比例-時代力量'],mp['政黨比例-基進黨'],mp['政黨比例-中間選民'],mp['政黨比例-其他政黨']],
+            series: [sv['政黨比例-國民黨'],sv['政黨比例-民進黨'],sv['政黨比例-民眾黨'],sv['政黨比例-時代力量'],sv['政黨比例-基進黨'],sv['政黨比例-中間選民'],sv['政黨比例-其他政黨']],
             colors: ['#05A5F5','#6BDA45','#F9B927','#D30877','#FC0B19','#929292','#28B2F4'],
             chart: {
               type: 'pie',
@@ -502,53 +587,6 @@
       }
     })
 
-
-    function zoomMap( newScale, pathXY ){
-      if (onZoom){ return }
-      onZoom = true
-
-      let trans = getXYS( $('#svgBox')[0] )
-      let oS = scaleValue
-      let nS = newScale
-      let cW = $('#detail-click').width()
-
-      nS = nS > 20 ? 20 : nS
-      nS = nS < 1 ? 1 : nS
-
-      // 邊界 ( 因為scale 是由中心放大，故/2 => 例如1000寬*2=>2000，左右各+500寬 => 邊界從左右 [0,0] => [500,-500] )
-      let bx = (ww*nS - ww) / 2
-      let by = (wh*nS - wh) / 2
-
-      let x = trans.x * nS / oS
-      let y = trans.y * nS / oS
-
-      if ( pathXY ){
-        let px = pathXY.x + ( pathXY.width / 2 )
-        let py = pathXY.y + ( pathXY.height / 2 )
-
-        x = (ww/2 - px) * nS
-        y = (wh/2 - py) * nS
-
-        x -= cW / 2
-      } else if ( event.deltaY ){
-        x = (ww/2 - event.offsetX) * nS + (event.clientX - ww/2)
-        y = (wh/2 - event.offsetY) * nS + (event.clientY - wh/2)
-      }
-
-      x = ( x > bx ) ? bx : x
-      x = ( x < -bx ) ? -bx : x
-      y = ( y > by ) ? by : y
-      y = ( y < -by ) ? -by : y
-
-      gsap.fromTo('#svgBox', 0.4, { x: trans.x, y: trans.y, scale: oS }, { x: x, y: y, scale: nS, ease: 'power2.out', 
-        onComplete: ()=>{ onZoom = false }
-      })
-      // $('#svgBox').css('transition', 'transform 0.5s').css('transform', `translate(${x}px,${y}px) scale(${nS})`)
-      
-      nS > 1 ? $('#backLv').show() : $('#backLv').hide()
-      scaleValue = nS
-    }
-
     $('#backLv').on('click', function(){
       if (onZoom){ return }
       let $Town = $('#svg').find('.town.active')
@@ -560,7 +598,7 @@
         $(`[mainId=${cId}]`).click()
       } else if ( $County.length > 0 && $Town.length === 0 ){
         $('#svg').click()
-        $('#backLv').hide()
+        // $('#backLv').hide()
         $County.removeClass('active')
         zoomMap(1)
       } else {
@@ -569,6 +607,7 @@
     })
 
     $('#svg').on('mouseenter', 'path', function(evt){
+      if (touch){ return }
       $('#cursor-hover').show()
     })
     $('#svg').on('mousemove', 'path', function(evt){
@@ -576,6 +615,9 @@
     })
     $('#svg').on('mouseleave', 'path', function(evt){
       $('#cursor-hover').hide()
+    })
+    $('#svg').on('touchstart', function(evt){
+      touch = true
     })
   </script>
 </body>

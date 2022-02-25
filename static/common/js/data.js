@@ -10,18 +10,18 @@
 // ajax 數個必要資料，callback 回傳整理過的 data
 function getMainData( callback ){
   $.get( '/static/common/json/TOWN2.json', ( townData )=>{
-    $.get( '/static/common/json/COUNTY5.json', ( countyData )=>{
+    $.get( '/static/common/json/COUNTY2.json', ( countyData )=>{
       $.get( '/static/common/json/survey.json', ( surveyData )=>{
         townData['mapSize'] = 'town'
         countyData['mapSize'] = 'county'
 
-        let mpB = {
-          ppbMax: 0,
-          ppbMin: 100,
-          ppgMax: 0,
-          ppgMin: 100,
-          sfMax: 0,
-          sfMin: 100,
+        let svB = {
+          "國民黨籍議員好感度比例Max": 0,
+          "國民黨籍議員好感度比例Min": 100,
+          "民進黨籍議員好感度比例Max": 0,
+          "民進黨籍議員好感度比例Min": 100,
+          "市長施政滿意比例Max": 0,
+          "市長施政滿意比例Min": 100,
         }
         // 將數據%轉為純數字
         surveyData = surveyData.map( (obj) => {
@@ -38,15 +38,18 @@ function getMainData( callback ){
           })
 
           if ( obj['國民黨籍議員好感度比例'] > obj['民進黨籍議員好感度比例'] ){
-            mpB.ppbMax = Math.max( mpB.ppbMax, obj['國民黨籍議員好感度比例'] )
-            mpB.ppbMin = Math.min( mpB.ppbMin, obj['國民黨籍議員好感度比例'] )
+            svB['國民黨籍議員好感度比例Max'] = Math.max( svB['國民黨籍議員好感度比例Max'], obj['國民黨籍議員好感度比例'] )
+            svB['國民黨籍議員好感度比例Min'] = Math.min( svB['國民黨籍議員好感度比例Min'], obj['國民黨籍議員好感度比例'] )
           } else if ( obj['國民黨籍議員好感度比例'] <= obj['民進黨籍議員好感度比例'] ) {
-            mpB.ppgMax = Math.max( mpB.ppgMax, obj['民進黨籍議員好感度比例'] )
-            mpB.ppgMin = Math.min( mpB.ppgMin, obj['民進黨籍議員好感度比例'] )
+            svB['民進黨籍議員好感度比例Max'] = Math.max( svB['民進黨籍議員好感度比例Max'], obj['民進黨籍議員好感度比例'] )
+            svB['民進黨籍議員好感度比例Min'] = Math.min( svB['民進黨籍議員好感度比例Min'], obj['民進黨籍議員好感度比例'] )
           }
 
-          mpB.sfMax = Math.max( mpB.sfMax, obj['市長施政滿意比例'], obj['市長施政不滿意比例'] )
-          mpB.sfMin = Math.min( mpB.sfMin, obj['市長施政滿意比例'], obj['市長施政不滿意比例'] )
+          if ( obj['市長施政滿意比例'] > obj['市長施政不滿意比例'] ){
+            svB['市長施政滿意比例Max'] = Math.max( svB['市長施政滿意比例Max'], (obj['市長施政滿意比例'] - obj['市長施政不滿意比例']).toFixed(2) )
+          } else if ( obj['市長施政滿意比例'] <= obj['市長施政不滿意比例'] ) {
+            svB['市長施政滿意比例Min'] = Math.min( svB['市長施政滿意比例Min'], (obj['市長施政滿意比例'] - obj['市長施政不滿意比例']).toFixed(2) )
+          }
 
           return obj
         })
@@ -55,7 +58,7 @@ function getMainData( callback ){
         townData.features.forEach( (obj) => {
           surveyData.find( (svObj) => {
             if ( obj.properties.TOWNNAME && ( svObj['縣市'] === obj.properties.COUNTYNAME && svObj['行政區'] === obj.properties.TOWNNAME ) ){
-              obj['mp'] = svObj
+              obj['sv'] = svObj
               return true
             }
             return false
@@ -66,7 +69,7 @@ function getMainData( callback ){
         countyData.features.forEach( (obj) => {
           surveyData.find( (svObj) => {
             if ( svObj['縣市'] === obj.properties.COUNTYNAME && svObj['行政區'] === '總和' ){
-              obj['mp'] = svObj
+              obj['sv'] = svObj
               return true
             }
             return false
@@ -77,7 +80,7 @@ function getMainData( callback ){
 
         let allData = JSON.parse(JSON.stringify(townData))
         allData['mapSize'] = 'all'
-        allData['mpBoundary'] = mpB
+        allData['svBoundary'] = svB
         allData.features = [...townData.features, ...countyData.features]
 
 
@@ -166,7 +169,7 @@ function getMainData( callback ){
           }
 
           function doItems( item ){
-            callback( item )
+            callback( item, data )
           }
           
           return data
@@ -280,8 +283,23 @@ function getMainData( callback ){
           }
         })
 
-        // 額外處理json檔，因為原始檔案陣列是反轉的，所以將它校正。
-        let data = data_polygon_edit( allData, (item)=>{ item.reverse() })
+        
+        allData['mapBoundary'] = { maxX: -90, maxY: -90, minX: 180, minY: 180 }
+        let data = data_polygon_edit( allData, (item, da)=>{ 
+          // 算出最大經緯度
+          $.each( item, (idx, ele)=>{
+            da['mapBoundary'].maxX = Math.max( da['mapBoundary'].maxX, ele[0] )
+            da['mapBoundary'].maxY = Math.max( da['mapBoundary'].maxY, ele[1] )
+            da['mapBoundary'].minX = Math.min( da['mapBoundary'].minX, ele[0] )
+            da['mapBoundary'].minY = Math.min( da['mapBoundary'].minY, ele[1] )
+          })
+
+          // 額外處理json檔，因為原始檔案陣列是反轉的，所以將它校正。
+          item.reverse() 
+        })
+
+        // console.log( (maxX - minX) / (maxY - minY) )
+
 
         callback( data )
       })
