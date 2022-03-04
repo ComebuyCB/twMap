@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <link rel="shortcut Icon" type="image/x-icon" href="/static/common/img/logo/Logo@3x.png">
   <title></title>
 
@@ -38,7 +38,40 @@
 <body>
   <div id="wrap">
     <main class="py-0">
+      <div id="map">
+        <div id="svgBox" style="transform: translate(0px,0px) scale(1)">
+          <svg id="svg" class="townMap" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="linearGradient1" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="black"></stop>
+                <stop offset="50%" stop-color=""></stop>
+                <stop offset="100%" stop-color="black"></stop>
+              </linearGradient>
+              <pattern id="pattern1" x="0" y="0" width="1" height="1" patternUnits="userSpaceOnUse">
+                <rect id="pattern1_rect1" width="1" height="1" fill="currentColor"></rect>
+                <line x1="0" y1="1" x2="1" y2="0" stroke="rgba(0,0,0,0.25)" stroke-width="0.15"></line>
+                <line x1="0" y1="0" x2="1" y2="1" stroke="rgba(255,255,255,0.25)" stroke-width="0.15"></line>
+              </pattern>
+              <pattern id="pattern2" x="0" y="0" width="1" height="1" patternUnits="userSpaceOnUse">
+                <rect id="pattern2_rect1" width="1" height="1" fill="currentColor" stroke="rgba(255,255,255,0.25)" stroke-width="0.25"></rect>
+                <line x1="0" y1="1" x2="1" y2="0" stroke="rgba(0,0,0,0.25)" stroke-width="0.15"></line>
+              </pattern>
+            </defs>
+          </svg>
+        </div>
+      </div>
+
+      <div id="cursor-hover">
+        <h6 id="cursor-county"></h6>
+        <small id="cursor-town"></small>
+      </div>
+
       <button id="backLv" class="btn btn-light pos-f loc-7" style="z-index: 10;">←</button>
+
+      <div class="nav flex-column nav-pills pos-f loc-7" style="z-index: 10; top: 50px;" role="tablist">
+        <button id="showPPColor" class="btn btn-primary nav-link active" data-bs-toggle="tab" type="button" role="tab" data-bs-target="#ppColorTable" onclick="changeThemeColor()">議員好感度黨籍比例</button>
+        <button id="showSFColor" class="btn btn-primary nav-link" data-bs-toggle="tab" type="button" role="tab" data-bs-target="#sfColorTable" onclick="changeThemeColor()">市長施政滿意度</button>
+      </div>
 
       <div class="p-1 pos-f loc-1 tab-content" style="z-index: 10; bottom: 15px">
         <table id="ppColorTable" class="tab-pane show active text-center">
@@ -71,26 +104,10 @@
         </table>
       </div>
 
-      <div class="nav flex-column nav-pills pos-f loc-7" style="z-index: 10; top: 50px;" role="tablist">
-        <button id="showPPColor" class="btn btn-primary nav-link active" data-bs-toggle="tab" type="button" role="tab" data-bs-target="#ppColorTable" onclick="changeThemeColor()">議員好感度黨籍比例</button>
-        <button id="showSFColor" class="btn btn-primary nav-link" data-bs-toggle="tab" type="button" role="tab" data-bs-target="#sfColorTable" onclick="changeThemeColor()">市長施政滿意度</button>
-      </div>
-
       <div class="d-flex flex-column pos-f loc-9" style="z-index: 10;">
         <button id="zoomIn" class="btn btn-success py-1 fs-5">+</button>
         <button id="zoomOut" class="btn btn-success py-1 fs-5">-</button>
       </div> 
-      
-      <div id="map">
-        <div id="svgBox" style="transform: translate(0px,0px) scale(1)">
-          <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
-        </div>
-      </div>
-
-      <div id="cursor-hover" class="card p-1 pos-f text-center" style="display: none; pointer-events: none; left: -999px; top: -999px">
-        <h6 id="cursor-county"></h6>
-        <small id="cursor-town"></small>
-      </div>
 
       <div id="detail-click" class="card p-3 pos-f loc-3">
         <h5 id="detail-location"></h5>
@@ -132,60 +149,69 @@
     var sfDomain
     var sfColor = d3.scale.linear().domain( d3.range( sfClrArr.length ) ).range( sfClrArr )
     
+    var chart1 = null
+    var chart2 = null
+    var chart3 = null
+    var chart4 = null
+
     var data
     var touch = false
 
 
-    let gDis = 0
-    interact('#svgBox')
-      .gesturable({
-        listeners: {
-          start (event) {
-            gDis = event.distance
-          },
-          move (event) {
-            if ( Math.abs(gDis - event.distance) > 1){
-              event.scale > 1.01 ? zoomMap( scaleValue*scaleAmp ) : ''
-              event.scale < 0.99 ? zoomMap( scaleValue/scaleAmp ) : ''
+    interactJs_drag()
+    function interactJs_drag(){
+      let gDis = 0
+      interact('#svgBox')
+        .gesturable({
+          listeners: {
+            start (event) {
+              gDis = event.distance
+            },
+            move (event) {
+              if ( Math.abs(gDis - event.distance) > 1){
+                event.scale > 1.01 ? zoomMap( scaleValue*scaleAmp ) : ''
+                event.scale < 0.99 ? zoomMap( scaleValue/scaleAmp ) : ''
+              }
+              dragMoveListener(event)
+              gDis = event.distance
+            },
+            end () {
             }
-            dragMoveListener(event)
-            gDis = event.distance
-          },
-          end () {
           }
-        }
-      })
-      .draggable({
-        inertia: true,
-        modifiers: [
-          interact.modifiers.restrictRect({
-            restriction: 'parent',
-            endOnly: true
-          })
-        ],
-        listeners: {
-          start (){
-            onDrag = true
-          },
-          move (event) {
-            dragMoveListener(event)
-          },
-          end () {
-            let st = setTimeout(()=>{
-              onDrag = false
-              clearTimeout(st)
-            }, 0)
+        })
+        .draggable({
+          inertia: true,
+          modifiers: [
+            interact.modifiers.restrictRect({
+              restriction: 'parent',
+              endOnly: true
+            })
+          ],
+          listeners: {
+            start (){
+              onDrag = true
+            },
+            move (event) {
+              dragMoveListener(event)
+            },
+            end () {
+              let st = setTimeout(()=>{
+                onDrag = false
+                clearTimeout(st)
+              }, 0)
+            }
           }
-        }
-      })
-      
-    function dragMoveListener(event) {
-      let trans = getXYS( event.target )
-      let x = (parseFloat(trans.x) || 0) + event.dx
-      let y = (parseFloat(trans.y) || 0) + event.dy
+        })
 
-      $(event.target).css('transform', `translate(${x}px, ${y}px) scale(${trans.s})`)
+        function dragMoveListener(event) {
+          let trans = getXYS( event.target )
+          let x = (parseFloat(trans.x) || 0) + event.dx
+          let y = (parseFloat(trans.y) || 0) + event.dy
+    
+          $(event.target).css('transform', `translate(${x}px, ${y}px) scale(${trans.s})`)
+        }
     }
+      
 
     function getXYS( elem ){
       let style = window.getComputedStyle( elem )
@@ -195,10 +221,66 @@
       return {x: e, y: f, s: a}
     }
 
-    getMainData( resData => {
+    let mapType = 'town'
+    let FN_mapD = ajaxMapData( mapType, (resData)=>{
+      $('#svg').addClass( mapType + 'Map' )
+      return resData
+    })
+    let FN_svD = ajaxSurveyData( '/static/common/json/mp2.json', resData => {
+      // 將數據%轉為純數字 & #N/A改為""
+      resData = resData.map( obj => {
+        $.each( obj, (key, val) => {
+          if ( val === '#N/A' ){
+            obj[key] = ''
+          } else if ( key.indexOf('好感度') > -1 || key.indexOf('比例') > -1 ){
+            obj[key] = val.indexOf('%') > -1 ? +val.replace('%','') : 0
+          } else {
+            obj[key] = val
+          }
+        })
+        return obj
+      })
+      return resData
+    })
+
+    getAllData( FN_mapD, FN_svD, resData => {
       data = resData
 
-      let svB = data.svBoundary
+      let svB = {
+        "國民黨籍議員好感度比例Max": 0,
+        "國民黨籍議員好感度比例Min": 100,
+        "民進黨籍議員好感度比例Max": 0,
+        "民進黨籍議員好感度比例Min": 100,
+        "市長施政滿意比例Max": 0,
+        "市長施政滿意比例Min": 100,
+        "市長施政不滿意比例Max": 0,
+        "市長施政不滿意比例Min": 100,
+      }
+
+      data.features.forEach( obj => {
+        if ( !obj.sv ) { return true }
+        if ( obj.sv['國民黨籍議員好感度比例'] > obj.sv['民進黨籍議員好感度比例'] ){
+          svB['國民黨籍議員好感度比例Max'] = Math.max( svB['國民黨籍議員好感度比例Max'], obj.sv['國民黨籍議員好感度比例'] )
+          svB['國民黨籍議員好感度比例Min'] = Math.min( svB['國民黨籍議員好感度比例Min'], obj.sv['國民黨籍議員好感度比例'] )
+        } else if ( obj.sv['國民黨籍議員好感度比例'] <= obj.sv['民進黨籍議員好感度比例'] ) {
+          svB['民進黨籍議員好感度比例Max'] = Math.max( svB['民進黨籍議員好感度比例Max'], obj.sv['民進黨籍議員好感度比例'] )
+          svB['民進黨籍議員好感度比例Min'] = Math.min( svB['民進黨籍議員好感度比例Min'], obj.sv['民進黨籍議員好感度比例'] )
+        }
+
+        svB['市長施政滿意比例Max'] = Math.max( svB['市長施政滿意比例Max'], obj.sv['市長施政滿意比例'] )
+        svB['市長施政滿意比例Min'] = Math.min( svB['市長施政滿意比例Min'], obj.sv['市長施政滿意比例'] )
+        svB['市長施政不滿意比例Max'] = Math.max( svB['市長施政不滿意比例Max'], obj.sv['市長施政不滿意比例'] )
+        svB['市長施政不滿意比例Min'] = Math.min( svB['市長施政不滿意比例Min'], obj.sv['市長施政不滿意比例'] )
+
+        // if ( obj['市長施政滿意比例'] > obj['市長施政不滿意比例'] ){
+        //   svB['市長施政滿意比例Max'] = Math.max( svB['市長施政滿意比例Max'], (obj['市長施政滿意比例'] - obj['市長施政不滿意比例']).toFixed(2) )
+        // } else if ( obj['市長施政滿意比例'] <= obj['市長施政不滿意比例'] ) {
+        //   svB['市長施政滿意比例Min'] = Math.min( svB['市長施政滿意比例Min'], (obj['市長施政滿意比例'] - obj['市長施政不滿意比例']).toFixed(2) )
+        // }
+      })
+
+      data.svBoundary = svB
+
       blueDomain = d3.scale.linear().domain([svB['國民黨籍議員好感度比例Min'], svB['國民黨籍議員好感度比例Max']]).range([0,blueClrArr.length-1])
       greenDomain = d3.scale.linear().domain([svB['民進黨籍議員好感度比例Min'], svB['民進黨籍議員好感度比例Max']]).range([0,greenClrArr.length-1])
       sfDomain = d3.scale.linear().domain([svB['市長施政滿意比例Min'], svB['市長施政滿意比例Max']]).range([0,sfClrArr.length-1])
@@ -248,6 +330,10 @@
       
       let path = d3.geo.path().projection( projection )
 
+      $('#svg def').append(`
+        
+      `)
+
       d3.select('#svg')
         .selectAll('path')
         .data( data.features )
@@ -265,7 +351,11 @@
           mainCode: (d) => d.properties.TOWNCODE || d.properties.COUNTYCODE,
           mainName: (d) => d.properties.TOWNNAME || d.properties.COUNTYNAME,
           indexNo: (d,i) => i,
-          class: (d) => d.properties.TOWNID ? 'town' : 'county'
+          class: (d) => d.properties.TOWNID ? 'town' : 'county',
+          // filter: d=> 'url(#mm)'
+        })
+        .style({
+          // fill: (d) => 'url(#mm)'
         })
         // .style({
         //   fill: (d) => { return 'rgba(255,255,255,1)' }
@@ -280,15 +370,17 @@
           if (onDrag) { return } 
         })
 
-        changeThemeColor()
+      changeThemeColor()
     }
 
     function changeThemeColor(){
       $.each( data.features, (idx,d)=>{
+        let color = 'rgba(255,255,255,1)'
+
         if (d.sv){
-          let color = 'rgba(255,255,255,1)'
           if ( $('#showSFColor').hasClass('active') ){
-            let sfR = (d.sv['市長施政滿意比例'] - d.sv['市長施政不滿意比例']).toFixed(2)
+            // let sfR = (d.sv['市長施政滿意比例'] - d.sv['市長施政不滿意比例']).toFixed(2)
+            let sfR = d.sv['市長施政滿意比例']
             color = sfColor( sfDomain( sfR ).toFixed(0) )
           } else {
             let blue = d.sv['國民黨籍議員好感度比例']
@@ -299,12 +391,14 @@
               color = greenColor( greenDomain(green).toFixed(0) )
             }
           }
-          
-          if ( d.sv['行政區'] === '總和' ){
-            $(`path[countyName=${d.sv['縣市']}][mainName=${d.sv['縣市']}]`).css('fill', color)
-          } else {
-            $(`path[countyName=${d.sv['縣市']}][mainName=${d.sv['行政區']}]`).css('fill', color)
-          }
+        }
+
+        if ( d.properties.TOWNID === undefined ){
+          $(`path[countyID=${d.properties.COUNTYID}][mainID=${d.properties.COUNTYID}]`).css('fill', color)
+          $(`path[countyID=${d.properties.COUNTYID}][mainID=${d.properties.COUNTYID}]`).attr('fillColor', color)
+        } else {
+          $(`path[countyID=${d.properties.COUNTYID}][mainID=${d.properties.TOWNID}]`).css('fill', color)
+          $(`path[countyID=${d.properties.COUNTYID}][mainID=${d.properties.TOWNID}]`).attr('fillColor', color)
         }
       })
     }
@@ -359,7 +453,6 @@
       ww = window.innerWidth
       wh = window.innerHeight
       create_D3GeoMap(data)
-      // location.reload()
     })
 
     $('#svgBox').on('mousewheel',() => {
@@ -377,6 +470,7 @@
       
       let $TG = $(event.target)
       if ( $TG[0].nodeName === 'path' ){
+        $('#detail-click').show()
         let indexNo = $TG.attr('indexNo')
         if ( $TG.hasClass('county') ){
           $('#svg').find('.county.active').removeClass('active')
@@ -384,19 +478,11 @@
         } else {
           $('#svg').find('.town.active').removeClass('active')
         }
-    
-        let rect = $TG[0].getBoundingClientRect()
-        let xs = ww / rect.width
-        let ys = wh / rect.height
-        
-        let s = xs > ys ? ys : xs
-        s = $TG.hasClass('county') ? s * 0.6 : s * 0.3
-        
-        zoomMap( scaleValue * s, $TG[0].getBBox() )
-    
-        $TG.addClass('active')
 
-        $('#detail-click').show()
+        $TG.addClass('active')
+        $('#svg').css('color', $TG.attr('fillColor') )
+        $('#linearGradient_001').find('stop[offset="50%"]').attr('stop-color', $TG.attr('fillColor') )
+
         $('#detail-chart1').html('')
         $('#detail-chart2').html('')
         $('#detail-chart3').html('')
@@ -407,13 +493,24 @@
         let townName = $TG.attr('townName') ? ' - ' + $TG.attr('townName') : ''
         $('#detail-location').text( countyName + townName )
 
-        console.log(rect, '放大:' + s, sv)
-
         // 生成圖表
         if ( sv ){
           $('#detail-charts').show()
+          $('#detail-noCharts').hide()
 
-          let chart1 = new ApexCharts( $("#detail-chart1")[0], {
+          let color_KMT = '#05A5F5'
+          let color_DPP = '#6BDA45'
+          let color_nop = '#929292'
+
+          let mpColors = [sv['第一名議員'], sv['第二名議員'], sv['第三名議員']].map( item => {
+            if ( item.indexOf('國民黨') > -1 ) return color_KMT
+            if ( item.indexOf('民進黨') > -1 ) return color_DPP
+            if ( item.indexOf('無黨籍') > -1 ) return color_nop
+            return color_nop
+          })
+
+          if ( chart1 ) { chart1.destroy() }
+          chart1 = new ApexCharts( $("#detail-chart1")[0], {
             xaxis: {
               categories: [sv['第一名議員'],sv['第二名議員'],sv['第三名議員']],
               labels: {
@@ -421,11 +518,11 @@
                 formatter: function (val) {
                   return val + "%"
                 }
-              }
+              },
             },
             series: [{
               name: '',
-              data: [sv['第一名議員好感度'],sv['第二名議員好感度'],sv['第三名議員好感度']]
+              data: [sv['第一名議員好感度'],sv['第二名議員好感度'],sv['第三名議員好感度']],
             }],
             dataLabels: {
               formatter: function (val, opt) {
@@ -438,8 +535,12 @@
               // width: 360,
               toolbar: {
                 show: false,
-              }
+              },
             },
+            legend: {
+              show: false,
+            },
+            colors: mpColors,
             tooltip: {
               y: {
                 formatter: function (val) {
@@ -449,6 +550,7 @@
             },
             plotOptions: {
               bar: {
+                distributed: true,
                 horizontal: true,
               }
             },
@@ -458,7 +560,8 @@
           })
           chart1.render()
 
-          let chart2 = new ApexCharts( $("#detail-chart2")[0], {
+          if ( chart2 ) { chart2.destroy() }
+          chart2 = new ApexCharts( $("#detail-chart2")[0], {
             series: [
               { name: '國民黨', data: [sv['國民黨籍議員好感度比例']] },
               { name: '民進黨', data: [sv['民進黨籍議員好感度比例']] },
@@ -503,7 +606,8 @@
           })
           chart2.render()
 
-          let chart3 = new ApexCharts( $("#detail-chart3")[0], {
+          if ( chart3 ) { chart3.destroy() }
+          chart3 = new ApexCharts( $("#detail-chart3")[0], {
             series: [
               { name: '滿意', data: [sv['市長施政滿意比例']] },
               { name: '不滿意', data: [sv['市長施政不滿意比例']] },
@@ -548,7 +652,8 @@
           })
           chart3.render()
 
-          let chart4 = new ApexCharts( $("#detail-chart4")[0], {
+          if ( chart4 ) { chart4.destroy() }
+          chart4 = new ApexCharts( $("#detail-chart4")[0], {
             labels: ['國民黨','民進黨','民眾黨','時代力量','基進黨','中間選民','其他政黨'],
             series: [sv['政黨比例-國民黨'],sv['政黨比例-民進黨'],sv['政黨比例-民眾黨'],sv['政黨比例-時代力量'],sv['政黨比例-基進黨'],sv['政黨比例-中間選民'],sv['政黨比例-其他政黨']],
             colors: ['#05A5F5','#6BDA45','#F9B927','#D30877','#FC0B19','#929292','#28B2F4'],
@@ -581,9 +686,17 @@
           $('#detail-charts').hide()
           $('#detail-noCharts').show()
         }
+
+        let rect = $TG[0].getBoundingClientRect()
+        let xs = ww / rect.width
+        let ys = wh / rect.height
+        let scale = xs > ys ? ys : xs
+        scale = $TG.hasClass('county') ? scale * 0.6 : scale * 0.3
+        zoomMap( scaleValue * scale, $TG[0].getBBox() )
+        console.log(rect, sv, '放大:' + scale )
+
       } else {
-        $('#detail-charts').hide()
-        $('#detail-noCharts').show()
+        $('#detail-click').hide()
       }
     })
 
@@ -611,7 +724,7 @@
       $('#cursor-hover').show()
     })
     $('#svg').on('mousemove', 'path', function(evt){
-      $('#cursor-hover').css({left: evt.clientX + 10 +'px', top: evt.clientY + 15 +'px'})
+      $('#cursor-hover').css({left: `${evt.clientX + 10}px`, top: `${evt.clientY + 15}px`})
     })
     $('#svg').on('mouseleave', 'path', function(evt){
       $('#cursor-hover').hide()
